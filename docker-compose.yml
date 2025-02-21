@@ -1,0 +1,36 @@
+version: '3.1'
+services:
+  graalvm:
+    #image: container-registry.oracle.com/graalvm/native-image:23-muslib
+    image: aliartos/simplehelloworld:latest
+    container_name: graalvm
+    ports:
+      - 9090:8080
+    environment:
+      - MY_ENV_VAR=foo
+    volumes:
+        - ./target:/target
+#    entrypoint: ["/bin/bash"]
+#    command: ["-c", "tail -f /dev/null"]
+
+  hello-world:
+    image: ubuntu-graalvm:latest
+    ports:
+      - 9090:8080
+    environment:
+      - MY_ENV_VAR=foo
+
+  graalvm-test:
+    image: graalvm-test:latest
+    container_name: graalvm-test
+    privileged: true  # Enables full privileges (equivalent to --privileged)
+    security_opt:
+      - seccomp=unconfined  # Further relaxes security settings
+    tmpfs:
+      - /tmp:exec
+    ports:
+      - 9090:8080
+    environment:
+      - MY_ENV_VAR=foo
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "tail -f /dev/null"]

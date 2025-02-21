@@ -1,0 +1,47 @@
+#FROM ghcr.io/graalvm/native-image-community:23-muslib AS build
+#FROM container-registry.oracle.com/graalvm/native-image:23-muslib AS build
+FROM container-registry.oracle.com/graalvm/native-image:23 AS build
+WORKDIR /home/app/ms
+
+RUN microdnf update -y
+RUN microdnf upgrade -y
+RUN microdnf install gcc gcc-c++ glibc-devel glibc-static zlib-devel libstdc++-static   gzip tar findutils
+
+# https://github.com/oracle/graal/issues/7692
+#RUN microdnf install findutils
+RUN groupadd --force -g 1000 app && \
+    useradd -g app -G app app
+RUN chmod -R 777 /home/app
+
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+RUN chmod 777 mvnw && chmod +x mvnw && sed -i 's/\r$//' mvnw
+
+RUN mkdir -p /opt/tmp && chmod 1777 /opt/tmp
+ENV TMPDIR=/opt/tmp
+ENV MAVEN_OPTS="-Djava.io.tmpdir=/opt/tmp"
+ENV JAVA_OPTS="-Djava.io.tmpdir=/opt/tmp"
+ENV JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=/opt/tmp"
+ENV SVM_CFLAGS="-DLC_ADDRESS=0 -DLC_IDENTIFICATION=0 -DLC_MEASUREMENT=0 -DLC_NAME=LC_TIME -DLC_PAPER=0 -DLC_TELEPHONE=0 -DLM_ID_BASE=0 -DLM_ID_NEWLM=0 -DRTLD_DI_LMID=0 -DLmid_t=unsigned long"
+
+USER app
+
+COPY src src
+RUN ls -la /home/app/ms/
+
+#1 BUILD JAR AND USE native-image tool
+#RUN ./mvnw clean install
+#RUN native-image -jar target/simplehelloworld-0.0.1-SNAPSHOT.jar  \
+#    --static -H:+UnlockExperimentalVMOptions \
+#    -H:TempDirectory=/home/app/ms/tmp \
+#    -H:Class=com.example.simplehelloworld.SimpleHelloWorldApplication
+
+
+ # native image build
+#RUN ./mvnw native:compile -Pnative
+RUN ./mvnw -Pnative clean package
+### RUN ./mvnw -Djava.io.tmpdir=/opt/tmp native:compile -Pnative
+#RUN ./mvnw clean package -Pnative,nativeTest
+
+RUN ls -la /home/app/ms/target

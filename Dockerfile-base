@@ -1,0 +1,40 @@
+#FROM container-registry.oracle.com/graalvm/native-image:23-muslib AS build
+#FROM container-registry.oracle.com/graalvm/native-image:23 AS build
+FROM ubuntu:24.10 AS build
+WORKDIR /app
+
+#RUN microdnf update -y
+#RUN microdnf upgrade -y
+
+#RUN microdnf install gcc glibc-devel zlib-devel libstdc++-static
+
+RUN apt-get update && apt-get install -y build-essential zlib1g-dev
+
+# install graalvm jdk
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install required packages for sdkman and build tools
+RUN apt-get update && apt-get install -y curl unzip zip
+
+# Install sdkman and then install the GraalVM JDK, all in one RUN
+RUN curl -s "https://get.sdkman.io" | bash && \
+    bash -c "source $HOME/.sdkman/bin/sdkman-init.sh && sdk install java 23.0.2-graal"
+
+# Set JAVA_HOME based on where sdkman installs the candidate.
+ENV JAVA_HOME=/root/.sdkman/candidates/java/23.0.2-graal
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+
+# RUN tdnf install -y tar
+
+RUN chmod +x mvnw && sed -i 's/\r$//' mvnw
+#RUN ./mvnw dependency:go-offline
+
+COPY src src
+
+# RUN ./mvnw clean install
+ # native image build
+RUN ./mvnw native:compile -Pnative
