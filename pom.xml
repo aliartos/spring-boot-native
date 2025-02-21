@@ -99,7 +99,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <layout>NONE</layout>
+<!--                    <layout>NONE</layout>-->
                     <excludeDevtools>true</excludeDevtools>
                     <image>
                         <name>aliartos/${project.artifactId}</name>
@@ -146,6 +146,13 @@
             </properties>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <layout>NONE</layout>
+                        </configuration>
+                    </plugin>
                     <plugin>
                         <groupId>org.graalvm.buildtools</groupId>
                         <artifactId>native-maven-plugin</artifactId>
