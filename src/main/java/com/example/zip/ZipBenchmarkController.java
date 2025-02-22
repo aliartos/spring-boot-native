@@ -25,10 +25,15 @@ public class ZipBenchmarkController {
     public Mono<String> uploadAndExtract(@RequestPart("file") FilePart filePart) {
 
         logger.info("Received file: {}", filePart.filename());
+
         return Mono.fromCallable(() -> Files.createTempFile("upload_", ".zip"))
                 .flatMap(tempZip -> filePart.transferTo(tempZip.toFile()).thenReturn(tempZip))
                 .flatMap(tempZip -> Mono.fromCallable(() -> {
                     Path extractDir = Files.createTempDirectory("extracted_");
+
+                    // file size log
+                    long fileSize = Files.size(tempZip);
+                    logger.info("File size: {}", fileSize);
                     boolean useZip4j = random.nextBoolean();
                     logger.info("Using {}", useZip4j ? "Zip4j" : "java.util.zip");
 
