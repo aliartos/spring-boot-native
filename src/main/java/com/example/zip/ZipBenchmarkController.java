@@ -10,6 +10,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.Comparator;
 import java.util.Random;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -23,25 +24,31 @@ public class ZipBenchmarkController {
     @PostMapping(value = "/upload", consumes = "multipart/form-data")
     public Mono<String> uploadAndExtract(@RequestPart("file") FilePart filePart) {
         return Mono.fromCallable(() -> Files.createTempFile("upload_", ".zip"))
-                .flatMap(tempZip -> filePart.transferTo(tempZip.toFile())
-                        .thenReturn(tempZip))
+                .flatMap(tempZip -> filePart.transferTo(tempZip.toFile()).thenReturn(tempZip))
                 .flatMap(tempZip -> Mono.fromCallable(() -> {
                     Path extractDir = Files.createTempDirectory("extracted_");
                     boolean useZip4j = random.nextBoolean();
                     logger.info("Using {}", useZip4j ? "Zip4j" : "java.util.zip");
 
                     long startTime = System.nanoTime();
-                    if (useZip4j) {
-                        extractWithZip4j(tempZip.toFile(), extractDir.toFile());
-                    } else {
-                        extractWithJavaUtilZip(tempZip.toFile(), extractDir.toFile());
-                    }
-                    long duration = System.nanoTime() - startTime;
+                    try {
+                        if (useZip4j) {
+                            extractWithZip4j(tempZip.toFile(), extractDir.toFile());
+                        } else {
+                            extractWithJavaUtilZip(tempZip.toFile(), extractDir.toFile());
+                        }
+                    } finally {
+                        long duration = System.nanoTime() - startTime;
+                        long timeMs = duration / 1_000_000;
+                        logger.info("Extraction completed in {} ms using {}", timeMs, useZip4j ? "Zip4j" : "java.util.zip");
 
-                    logger.info("Extraction completed in {} ms using {}", duration / 1_000_000, useZip4j ? "Zip4j" : "java.util.zip");
-                    return "Extraction successful! Method used: " + (useZip4j ? "Zip4j" : "java.util.zip") + "  Duration: " + duration / 1_000_000 + " ms!";
+                        return new ExtractionResult(useZip4j ? "Zip4j" : "java.util.zip", timeMs, tempZip, extractDir);
+                    }
                 }))
-                .subscribeOn(Schedulers.boundedElastic()); // Run in a separate thread pool
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(result -> cleanUpTempFiles(result.zipFile, result.extractDir))
+                .map(result -> String.format("Extraction successful! Library: %s, Time Taken: %d ms",
+                        result.library, result.timeMs));
     }
 
     private void extractWithJavaUtilZip(File zipFile, File destDir) throws IOException {
@@ -73,5 +80,42 @@ public class ZipBenchmarkController {
             zip4j.extractAll(destDir.getAbsolutePath());
         }
         logger.info("Zip4j extraction completed.");
+    }
+
+    private void cleanUpTempFiles(Path zipFile, Path extractDir) {
+        try {
+            // Delete extracted directory and contents
+            Files.walk(extractDir)
+                    .sorted(Comparator.reverseOrder()) // Delete files before the directory itself
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                            logger.info("Deleted: {}", path);
+                        } catch (IOException e) {
+                            logger.error("Failed to delete: {}", path, e);
+                        }
+                    });
+
+            // Delete ZIP file
+            Files.deleteIfExists(zipFile);
+            logger.info("Deleted uploaded ZIP: {}", zipFile);
+        } catch (IOException e) {
+            logger.error("Cleanup failed", e);
+        }
+    }
+
+    // Utility class to track extraction results
+    private static class ExtractionResult {
+        String library;
+        long timeMs;
+        Path zipFile;
+        Path extractDir;
+
+        ExtractionResult(String library, long timeMs, Path zipFile, Path extractDir) {
+            this.library = library;
+            this.timeMs = timeMs;
+            this.zipFile = zipFile;
+            this.extractDir = extractDir;
+        }
     }
 }
