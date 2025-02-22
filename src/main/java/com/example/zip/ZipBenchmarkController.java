@@ -23,6 +23,8 @@ public class ZipBenchmarkController {
 
     @PostMapping(value = "/upload", consumes = "multipart/form-data")
     public Mono<String> uploadAndExtract(@RequestPart("file") FilePart filePart) {
+
+        logger.info("Received file: {}", filePart.filename());
         return Mono.fromCallable(() -> Files.createTempFile("upload_", ".zip"))
                 .flatMap(tempZip -> filePart.transferTo(tempZip.toFile()).thenReturn(tempZip))
                 .flatMap(tempZip -> Mono.fromCallable(() -> {
